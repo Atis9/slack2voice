@@ -12,6 +12,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ebitengine/oto/v3"
@@ -26,6 +27,8 @@ const (
 	voicevoxAPITimeout    = 20 * time.Second
 	wavHeaderSize         = 44
 	audioPlayPollInterval = 50 * time.Millisecond
+	otoSampleRate         = 24000
+	otoChannelCount       = 1
 )
 
 type Config struct {
@@ -36,6 +39,11 @@ type Config struct {
 	UserIDs            []string `json:"user_ids"`
 	ChannelIDs         []string `json:"channel_ids"`
 }
+
+var (
+	audioMutex   sync.Mutex
+	globalOtoCtx *oto.Context
+)
 
 func loadConfig() (*Config, error) {
 	if err := godotenv.Load(".env"); err != nil {
@@ -179,25 +187,16 @@ func (vc *VoicevoxClient) Synthesis(ctx context.Context, audioQueryJSON []byte) 
 }
 
 func playAudio(pcmData []byte) error {
-	op := &oto.NewContextOptions{}
-	op.SampleRate = 24000
-	op.ChannelCount = 1
-	op.Format = oto.FormatSignedInt16LE
-
-	otoCtx, readyChan, err := oto.NewContext(op)
-	if err != nil {
-		return fmt.Errorf("failed to create oto context: %w", err)
+	if globalOtoCtx == nil {
+		return fmt.Errorf("global oto context is not initialized")
 	}
-	<-readyChan
-
-	player := otoCtx.NewPlayer(bytes.NewReader(pcmData))
+	player := globalOtoCtx.NewPlayer(bytes.NewReader(pcmData))
 	defer player.Close()
 
 	player.Play()
 	for player.IsPlaying() {
 		time.Sleep(audioPlayPollInterval)
 	}
-
 	return nil
 }
 
@@ -208,6 +207,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("FATAL: Error loading configuration: %v", err)
 	}
+
+	op := &oto.NewContextOptions{}
+	op.SampleRate = otoSampleRate
+	op.ChannelCount = otoChannelCount
+	op.Format = oto.FormatSignedInt16LE
+
+	var readyChan <-chan struct{}
+	globalOtoCtx, readyChan, err = oto.NewContext(op)
+	if err != nil {
+		log.Fatalf("FATAL: Failed to create global oto context: %v", err)
+	}
+	<-readyChan
+	log.Println("INFO: Global Oto context initialized successfully.")
 
 	slackAPI := slack.New(
 		cfg.SlackBotToken,
@@ -354,6 +366,9 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 
 	pcmDataSize := len(wavData) - wavHeaderSize
 	log.Printf("INFO: Playing audio for \"%s\" (WAV size: %d bytes, PCM size: %d bytes)", textToSpeak, len(wavData), pcmDataSize)
+
+	audioMutex.Lock()
+	defer audioMutex.Unlock()
 
 	itemRef := slack.NewRefToMessage(event.Channel, event.TimeStamp)
 	reactionName := "speaker"

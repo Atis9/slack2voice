@@ -355,6 +355,16 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 	pcmDataSize := len(wavData) - wavHeaderSize
 	log.Printf("INFO: Playing audio for \"%s\" (WAV size: %d bytes, PCM size: %d bytes)", textToSpeak, len(wavData), pcmDataSize)
 
+	itemRef := slack.NewRefToMessage(event.Channel, event.TimeStamp)
+	reactionName := "speaker"
+
+	errAddReaction := slackAPI.AddReactionContext(ctx, reactionName, itemRef)
+	if errAddReaction != nil {
+		log.Printf("WARNING: Failed to add reaction ':%s:' to message TS %s in channel %s: %v", reactionName, event.TimeStamp, event.Channel, errAddReaction)
+	} else {
+		log.Printf("INFO: Added reaction ':%s:' to message TS %s in channel %s", reactionName, event.TimeStamp, event.Channel)
+	}
+
 	if err := playAudio(wavData[wavHeaderSize:]); err != nil {
 		log.Printf("ERROR: Failed to play audio for \"%s\": %v", textToSpeak, err)
 	} else {

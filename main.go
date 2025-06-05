@@ -370,4 +370,11 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 	} else {
 		log.Printf("INFO: Finished playing audio for \"%s\"", textToSpeak)
 	}
+
+	errRemoveReaction := slackAPI.RemoveReactionContext(ctx, reactionName, itemRef)
+	if errRemoveReaction != nil {
+		log.Printf("WARNING: Failed to remove reaction ':%s:' to message TS %s in channel %s: %v", reactionName, event.TimeStamp, event.Channel, errRemoveReaction)
+	} else {
+		log.Printf("INFO: Removed reaction ':%s:' to message TS %s in channel %s", reactionName, event.TimeStamp, event.Channel)
+	}
 }

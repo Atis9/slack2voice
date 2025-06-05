@@ -34,6 +34,7 @@ type Config struct {
 	VoicevoxEndpoint   string
 	VoicevoxSpeakerID  string
 	UserIDs            []string `json:"user_ids"`
+	ChannelIDs         []string `json:"channel_ids"`
 }
 
 func loadConfig() (*Config, error) {
@@ -51,7 +52,6 @@ func loadConfig() (*Config, error) {
 
 	cfg.SlackAppLevelToken = os.Getenv("SLACK_APP_LEVEL_TOKEN")
 	if cfg.SlackAppLevelToken == "" {
-
 		missingEnvVars = append(missingEnvVars, "SLACK_APP_LEVEL_TOKEN")
 	}
 
@@ -62,7 +62,17 @@ func loadConfig() (*Config, error) {
 		}
 	} else {
 		cfg.UserIDs = []string{}
-		log.Println("INFO: USER_IDS not set; no specific users will be targeted for readout unless specified.")
+		log.Println("INFO: USER_IDS not set; no messages will be read out based on user ID filter.")
+	}
+
+	channelIDsJSON := os.Getenv("CHANNEL_IDS")
+	if channelIDsJSON != "" {
+		if err := json.Unmarshal([]byte(channelIDsJSON), &cfg.ChannelIDs); err != nil {
+			return nil, fmt.Errorf("failed to parse CHANNEL_IDS: %w", err)
+		}
+	} else {
+		cfg.ChannelIDs = []string{}
+		log.Println("INFO: CHANNEL_IDS not set; channel filtering will not be applied.")
 	}
 
 	cfg.VoicevoxEndpoint = os.Getenv("VOICEVOX_ENDPOINT")
@@ -133,7 +143,6 @@ func (vc *VoicevoxClient) GetAudioQuery(ctx context.Context, text string) ([]byt
 }
 
 func (vc *VoicevoxClient) Synthesis(ctx context.Context, audioQueryJSON []byte) ([]byte, error) {
-
 	synthesisURL, err := url.JoinPath(vc.endpoint, "synthesis")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create synthesis URL path: %w", err)
@@ -203,7 +212,6 @@ func main() {
 	slackAPI := slack.New(
 		cfg.SlackBotToken,
 		slack.OptionAppLevelToken(cfg.SlackAppLevelToken),
-
 	)
 
 	if _, err := slackAPI.AuthTest(); err != nil {
@@ -214,7 +222,6 @@ func main() {
 	if len(cfg.UserIDs) > 0 {
 		log.Println("INFO: Will attempt to read out messages from the following User IDs:")
 		for _, userID := range cfg.UserIDs {
-
 			userInfo, err := slackAPI.GetUserInfo(userID)
 			if err != nil {
 				log.Printf("WARNING: Could not fetch info for target User ID %s: %v. Bot will still try to match this ID.", userID, err)
@@ -224,6 +231,16 @@ func main() {
 		}
 	} else {
 		log.Println("INFO: No specific UserIDs configured. Bot will not read out messages based on user ID filter.")
+	}
+
+	if len(cfg.ChannelIDs) > 0 {
+		log.Println("INFO: Messages will be filtered to the following Channel IDs:")
+		for _, channelID := range cfg.ChannelIDs {
+
+			log.Printf("  - Target Channel: ID=%s", channelID)
+		}
+	} else {
+		log.Println("INFO: No specific ChannelIDs configured. Channel filtering will not be applied.")
 	}
 
 	vvClient := NewVoicevoxClient(cfg.VoicevoxEndpoint, cfg.VoicevoxSpeakerID)
@@ -260,7 +277,6 @@ func runEventLoop(client *socketmode.Client, slackAPI *slack.Client, cfg *Config
 
 			switch eventsAPIEvent.Type {
 			case slackevents.CallbackEvent:
-
 				go processCallbackEvent(slackAPI, cfg, vvClient, eventsAPIEvent.InnerEvent)
 			default:
 
@@ -274,11 +290,9 @@ func runEventLoop(client *socketmode.Client, slackAPI *slack.Client, cfg *Config
 func processCallbackEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxClient, innerEvent slackevents.EventsAPIInnerEvent) {
 	switch event := innerEvent.Data.(type) {
 	case *slackevents.MessageEvent:
-
 		if event.User == "" || event.BotID != "" || event.SubType == "bot_message" || event.SubType == "slackbot_response" {
 			return
 		}
-
 		handleMessageEvent(slackAPI, cfg, vvClient, event)
 	default:
 
@@ -288,6 +302,12 @@ func processCallbackEvent(slackAPI *slack.Client, cfg *Config, vvClient *Voicevo
 func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxClient, event *slackevents.MessageEvent) {
 	if !slices.Contains(cfg.UserIDs, event.User) {
 		return
+	}
+
+	if len(cfg.ChannelIDs) > 0 {
+		if !slices.Contains(cfg.ChannelIDs, event.Channel) {
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), voicevoxAPITimeout)
@@ -331,7 +351,9 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 		return
 	}
 
-	log.Printf("INFO: Playing audio for \"%s\" (PCM data size: %d bytes)", textToSpeak, len(wavData)-wavHeaderSize)
+	pcmDataSize := len(wavData) - wavHeaderSize
+	log.Printf("INFO: Playing audio for \"%s\" (WAV size: %d bytes, PCM size: %d bytes)", textToSpeak, len(wavData), pcmDataSize)
+
 	if err := playAudio(wavData[wavHeaderSize:]); err != nil {
 		log.Printf("ERROR: Failed to play audio for \"%s\": %v", textToSpeak, err)
 	} else {

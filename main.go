@@ -300,8 +300,10 @@ func processCallbackEvent(slackAPI *slack.Client, cfg *Config, vvClient *Voicevo
 }
 
 func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxClient, event *slackevents.MessageEvent) {
-	if !slices.Contains(cfg.UserIDs, event.User) {
-		return
+	if len(cfg.UserIDs) > 0 {
+		if !slices.Contains(cfg.UserIDs, event.User) {
+			return
+		}
 	}
 
 	if len(cfg.ChannelIDs) > 0 {

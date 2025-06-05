@@ -230,13 +230,12 @@ func main() {
 			log.Printf("  - Target User: ID=%s, Name=%s", userInfo.ID, userInfo.Profile.DisplayName)
 		}
 	} else {
-		log.Println("INFO: No specific UserIDs configured. Bot will not read out messages based on user ID filter.")
+		log.Println("INFO: No specific UserIDs configured. User filtering will not be applied.")
 	}
 
 	if len(cfg.ChannelIDs) > 0 {
 		log.Println("INFO: Messages will be filtered to the following Channel IDs:")
 		for _, channelID := range cfg.ChannelIDs {
-
 			log.Printf("  - Target Channel: ID=%s", channelID)
 		}
 	} else {

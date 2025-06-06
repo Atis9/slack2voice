@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -326,6 +327,15 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 	ctx, cancel := context.WithTimeout(context.Background(), voicevoxAPITimeout)
 	defer cancel()
 
+	re := regexp.MustCompile(`<([^|>]+?)(\|(.+?))?>`)
+	processedText := re.ReplaceAllStringFunc(event.Text, func(match string) string {
+		submatches := re.FindStringSubmatch(match)
+		if len(submatches) > 3 && submatches[3] != "" {
+			return submatches[3]
+		}
+		return ""
+	})
+
 	var displayName string
 	userInfo, err := slackAPI.GetUserInfoContext(ctx, event.User)
 	if err != nil {
@@ -344,7 +354,7 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 		}
 	}
 
-	textToSpeak := fmt.Sprintf("%sさんからのメッセージ。 %s", displayName, event.Text)
+	textToSpeak := fmt.Sprintf("%sさんからのメッセージ。%s", displayName, processedText)
 	log.Printf("INFO: Preparing to speak: \"%s\"", textToSpeak)
 
 	audioQueryJSON, err := vvClient.GetAudioQuery(ctx, textToSpeak)

@@ -70,7 +70,6 @@ func loadConfig() (*Config, error) {
 			return nil, fmt.Errorf("failed to parse USER_IDS: %w", err)
 		}
 	} else {
-		cfg.UserIDs = []string{}
 		log.Println("INFO: USER_IDS not set; no messages will be read out based on user ID filter.")
 	}
 
@@ -80,7 +79,6 @@ func loadConfig() (*Config, error) {
 			return nil, fmt.Errorf("failed to parse CHANNEL_IDS: %w", err)
 		}
 	} else {
-		cfg.ChannelIDs = []string{}
 		log.Println("INFO: CHANNEL_IDS not set; channel filtering will not be applied.")
 	}
 

@@ -290,11 +290,7 @@ func runEventLoop(client *socketmode.Client, slackAPI *slack.Client, cfg *Config
 			switch eventsAPIEvent.Type {
 			case slackevents.CallbackEvent:
 				go processCallbackEvent(slackAPI, cfg, vvClient, eventsAPIEvent.InnerEvent)
-			default:
-
 			}
-		default:
-
 		}
 	}
 }
@@ -306,8 +302,6 @@ func processCallbackEvent(slackAPI *slack.Client, cfg *Config, vvClient *Voicevo
 			return
 		}
 		handleMessageEvent(slackAPI, cfg, vvClient, event)
-	default:
-
 	}
 }
 

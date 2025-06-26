@@ -18,6 +18,8 @@ const (
 	wavHeaderSize      = 44
 )
 
+var slackMsgRegex = regexp.MustCompile(`<([^|>]+?)(\|(.+?))?>`)
+
 func runEventLoop(client *socketmode.Client, slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxClient) {
 	for envelope := range client.Events {
 		switch envelope.Type {
@@ -71,9 +73,8 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 	ctx, cancel := context.WithTimeout(context.Background(), voicevoxAPITimeout)
 	defer cancel()
 
-	re := regexp.MustCompile(`<([^|>]+?)(\|(.+?))?>`)
-	processedText := re.ReplaceAllStringFunc(event.Text, func(match string) string {
-		submatches := re.FindStringSubmatch(match)
+	processedText := slackMsgRegex.ReplaceAllStringFunc(event.Text, func(match string) string {
+		submatches := slackMsgRegex.FindStringSubmatch(match)
 		if len(submatches) > 3 && submatches[3] != "" {
 			return submatches[3]
 		}

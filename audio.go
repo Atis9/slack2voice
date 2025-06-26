@@ -14,6 +14,7 @@ const (
 	audioPlayPollInterval = 50 * time.Millisecond
 	otoSampleRate         = 24000
 	otoChannelCount       = 1
+	otoContextTimeout     = 5 * time.Second
 )
 
 var (
@@ -33,8 +34,13 @@ func initAudio() error {
 	if err != nil {
 		return fmt.Errorf("failed to create global oto context: %w", err)
 	}
-	<-readyChan
-	log.Println("INFO: Global Oto context initialized successfully.")
+
+	select {
+	case <-readyChan:
+		log.Println("INFO: Global Oto context initialized successfully.")
+	case <-time.After(otoContextTimeout):
+		return fmt.Errorf("timed out waiting for oto context to be ready after %s", otoContextTimeout)
+	}
 	return nil
 }
 

@@ -16,6 +16,7 @@ import (
 const (
 	voicevoxAPITimeout = 20 * time.Second
 	wavHeaderSize      = 44
+	reactionSpeaker    = "speaker"
 )
 
 var slackMsgRegex = regexp.MustCompile(`<([^|>]+?)(\|(.+?))?>`)
@@ -126,13 +127,12 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 	defer audioMutex.Unlock()
 
 	itemRef := slack.NewRefToMessage(event.Channel, event.TimeStamp)
-	reactionName := "speaker"
 
-	errAddReaction := slackAPI.AddReactionContext(ctx, reactionName, itemRef)
+	errAddReaction := slackAPI.AddReactionContext(ctx, reactionSpeaker, itemRef)
 	if errAddReaction != nil {
-		log.Printf("WARNING: Failed to add reaction ':%s:' to message TS %s in channel %s: %v", reactionName, event.TimeStamp, event.Channel, errAddReaction)
+		log.Printf("WARNING: Failed to add reaction ':%s:' to message TS %s in channel %s: %v", reactionSpeaker, event.TimeStamp, event.Channel, errAddReaction)
 	} else {
-		log.Printf("INFO: Added reaction ':%s:' to message TS %s in channel %s", reactionName, event.TimeStamp, event.Channel)
+		log.Printf("INFO: Added reaction ':%s:' to message TS %s in channel %s", reactionSpeaker, event.TimeStamp, event.Channel)
 	}
 
 	if err := playAudio(wavData[wavHeaderSize:]); err != nil {
@@ -141,10 +141,11 @@ func handleMessageEvent(slackAPI *slack.Client, cfg *Config, vvClient *VoicevoxC
 		log.Printf("INFO: Finished playing audio for \"%s\"", textToSpeak)
 	}
 
-	errRemoveReaction := slackAPI.RemoveReactionContext(ctx, reactionName, itemRef)
+	errRemoveReaction := slackAPI.RemoveReactionContext(ctx, reactionSpeaker, itemRef)
 	if errRemoveReaction != nil {
-		log.Printf("WARNING: Failed to remove reaction ':%s:' to message TS %s in channel %s: %v", reactionName, event.TimeStamp, event.Channel, errRemoveReaction)
+		log.Printf("WARNING: Failed to remove reaction ':%s:' to message TS %s in channel %s: %v", reactionSpeaker, event.TimeStamp, event.Channel, errRemoveReaction)
 	} else {
-		log.Printf("INFO: Removed reaction ':%s:' to message TS %s in channel %s", reactionName, event.TimeStamp, event.Channel)
+		log.Printf("INFO: Removed reaction ':%s:' to message TS %s in channel %s", reactionSpeaker, event.TimeStamp, event.Channel)
 	}
+
 }
